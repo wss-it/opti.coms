@@ -16,28 +16,48 @@ using namespace boost::python;
 #define DFC_TCP 3
 
 
-namespace {
-	int get_serial(std::string host, int port) {
+namespace
+{
+	void raise_dfc_exception(int error)
+	{
+		char msg[254];
+		memset(msg, 0, 254);
+
+		DFCGetErrorText(DFC_COMNUM, error, 0, msg, 254);
+		throw std::runtime_error(msg);
+	}
+
+	void connect(std::string host, int port, unsigned int read_timeout_ms)
+	{
 		char *chost = strdup(host.c_str());
-		if(! DFCComOpenIV(DFC_COMNUM, DFC_BUSNUM, DFC_TCP, chost, port, 3000)) {
-			free(chost);
+		if(! DFCComOpenIV(DFC_COMNUM, DFC_BUSNUM, DFC_TCP, chost, port, read_timeout_ms)) {
+			throw std::runtime_error("could not connect to host");
+		}
+
+		free(chost);
+	}
+
+	int get_serial()
+	{
+		int error = 0, serial = 0;
+		if(! DFCGetSeriennummer(DFC_COMNUM, DFC_BUSNUM, &error, &serial))
+		{
+			raise_dfc_exception(error);
 			return -1;
 		}
-		free(chost);
 
-		int error = 0, serial = 0;
-		if(! DFCGetSeriennummer(DFC_COMNUM, DFC_BUSNUM, &error, &serial)) {
-			// DFCGetErrorText(DFC_COMNUM, error, 0, g_CommonInfo.szErrorMsg, 254);
-
-			return -2;
-		}
-
-		DFCComClose(DFC_COMNUM);
 		return serial;
+	}
+
+	void disconnect()
+	{
+		DFCComClose(DFC_COMNUM);
 	}
 }
 
 BOOST_PYTHON_MODULE(pydfcom)
 {
+	def("connect", connect);
 	def("get_serial", get_serial);
+	def("disconnect", disconnect);
 }
