@@ -1,0 +1,3 @@
+ - libpython3-dev
+ - python3-dev
+ - libboost-python-dev
