@@ -29,6 +29,91 @@ namespace
 		throw std::runtime_error(msg);
 	}
 
+	PyObject *_decode_buffer(unsigned char* buf, int len, PyObject *desc)
+	{
+		if(! PyList_Check(desc))
+		{
+			throw std::runtime_error("desc-argument is not a list");
+		}
+
+		PyObject *item = PyDict_New();
+
+		Py_ssize_t nfields = PyList_Size(desc);
+		for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
+		{
+			PyObject *field = PyList_GetItem(desc, nfield);
+			PyObject *v;
+
+			if(! PyDict_Check(field))
+			{
+				PyObject_Free(item);
+				throw std::runtime_error("desc-list contains an item that is not a dict");
+			}
+
+
+			v = PyDict_GetItemString(field, "type");
+			if(! PyLong_Check(v))
+			{
+				PyObject_Free(item);
+				throw std::runtime_error("desc-list contains an dict with a member 'type' which is no int");
+			}
+			long type = PyLong_AsLong(v);
+
+
+			v = PyDict_GetItemString(field, "size");
+			if(! PyLong_Check(v))
+			{
+				PyObject_Free(item);
+				throw std::runtime_error("desc-list contains an dict with a member 'size' which is no int");
+			}
+			long size = PyLong_AsLong(v);
+
+			if(len < size)
+			{
+				throw std::runtime_error("field definition is larget then buffer");
+			}
+
+			switch(type)
+			{
+				case 3:  // string
+					v = PyUnicode_DecodeLatin1((char*)buf, size-1, NULL);
+					break;
+
+				case 2:  // date
+					v = PyDateTime_FromDateAndTime(
+						/* year */  buf[0] * 100 + buf[1],
+						/* month */ buf[2],
+						/* day */   buf[3],
+						/* hour */  buf[4],
+						/* minute */buf[5],
+						/* second */buf[6],
+						/* usec */  0);
+					break;
+
+				default:
+					Py_INCREF(Py_None);
+					v = Py_None;
+					break;
+			}
+
+			len -= size;
+			buf += size;
+
+			PyObject *k = PyDict_GetItemString(field, "fieldname");
+			if(! PyUnicode_Check(k))
+			{
+				PyObject_Free(item);
+				throw std::runtime_error("desc-list contains an dict with a member 'name' which is no str");
+			}
+
+			PyDict_SetItem(item, k, v);
+		}
+
+		return item;
+	}
+
+
+
 	void connect(std::string host, int port, unsigned int read_timeout_ms)
 	{
 		char *chost = strdup(host.c_str());
@@ -182,6 +267,103 @@ namespace
 		free(field_length_ints);
 	}
 
+	PyObject *read_data_descriptions()
+	{
+		int error;
+
+		if(!DFCLoadDatensatzbeschreibung(DFC_COMNUM, DFC_BUSNUM, &error))
+		{
+			_dfc_error(error);
+			return NULL;
+		}
+
+		int ndescs = DFCDatBCnt(DFC_COMNUM);
+		PyObject *descs = PyList_New(ndescs);
+
+		for(int ndesc = 0; ndesc < ndescs; ndesc++)
+		{
+			int nfields;
+			unsigned char listname[17];
+
+			DFCDatBDatensatz(DFC_COMNUM, ndesc, listname, &nfields);
+
+			PyObject *fields = PyList_New(nfields);
+			PyList_SetItem(descs, ndesc, fields);
+
+			for(int nfield = 0; nfield < nfields; nfield++)
+			{
+				int type, size;
+				unsigned char fieldname[17];
+
+				DFCDatBFeld(DFC_COMNUM, ndesc, nfield, fieldname, &type, &size);
+
+				PyObject *field = PyDict_New();
+				PyList_SetItem(fields, nfield, field);
+
+				PyDict_SetItemString(field, "fieldname",
+					PyUnicode_DecodeLatin1((const char*)fieldname, strlen((const char*)fieldname), NULL));
+
+				PyDict_SetItemString(field, "type",
+					PyLong_FromLong(type));
+
+				PyDict_SetItemString(field, "size",
+					PyLong_FromLong(size));
+			}
+		}
+
+		return descs;
+	}
+
+	PyObject *read_data(PyObject *desc)
+	{
+		int error;
+
+		if(! PyList_Check(desc))
+		{
+			throw std::runtime_error("desc-argument is not a list");
+		}
+
+		PyObject *items = PyList_New(0);
+
+		switch (DFCComCollectData(DFC_COMNUM, DFC_BUSNUM, &error)) {
+			// error occured
+			case -1:
+				PyObject_Free(items);
+				_dfc_error(error);
+				return NULL;
+
+			// nothing there
+			case 0:
+				return items;
+		}
+
+		int len, ret;
+		unsigned char buf[0xFF];
+		do {
+			switch (ret = DFCComGetDatensatz(DFC_COMNUM, buf, &len, &error))
+			{
+				case -1:
+					PyObject_Free(items);
+					_dfc_error(error);
+					return NULL;
+
+				case 0:
+					break;
+
+				case 1: // Datensatz in Folge.
+				case 2: // Letzter Datensatz.
+					int desc_id = buf[0];
+					PyObject *fielddesc = PyList_GetItem(desc, desc_id);
+
+					PyObject *item = _decode_buffer(&buf[1], len-1, fielddesc);
+					PyList_Append(items, item);
+					break;
+			}
+		} while (ret == 1);
+
+		return items;
+	}
+
 	void disconnect()
 	{
 		DFCComClose(DFC_COMNUM);
@@ -192,10 +374,20 @@ BOOST_PYTHON_MODULE(pydfcom)
 {
 	PyDateTimeAPI = (PyDateTime_CAPI *)PyCapsule_Import(PyDateTime_CAPSULE_NAME, 0);
 
+	boost::python::scope().attr("TYPE_DATE") = 3;
+	boost::python::scope().attr("TYPE_STRING") = 2;
+
 	def("connect", connect);
+
 	def("get_serial", get_serial);
+
 	def("get_datetime", get_datetime);
 	def("set_datetime", set_datetime);
+
 	def("push_list", push_list);
+
+	def("read_data_descriptions", read_data_descriptions);
+	def("read_data", read_data);
+
 	def("disconnect", disconnect);
 }
