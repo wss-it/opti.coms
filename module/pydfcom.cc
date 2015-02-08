@@ -178,11 +178,58 @@ namespace
 		}
 	}
 
-	void push_list(int list_id, PyObject *field_lengths, PyObject *data)
+	PyObject *read_list_descriptions()
 	{
-		if(! PyList_Check(field_lengths))
+		int error, zero;
+
+		if(!DFCLoadListenbeschreibung(DFC_COMNUM, DFC_BUSNUM, &error))
 		{
-			throw std::runtime_error("field_lengths-argument is not a list");
+			_dfc_error(error);
+			return NULL;
+		}
+
+		int ndescs = DFCListBCnt(DFC_COMNUM);
+		PyObject *descs = PyList_New(ndescs);
+
+		for(int ndesc = 0; ndesc < ndescs; ndesc++)
+		{
+			int nfields;
+			unsigned char listname[17];
+
+			DFCListBDatensatz(DFC_COMNUM, ndesc, listname, &nfields, &zero);
+
+			PyObject *fields = PyList_New(nfields);
+			PyList_SetItem(descs, ndesc, fields);
+
+			for(int nfield = 0; nfield < nfields; nfield++)
+			{
+				int type, size;
+				unsigned char fieldname[17];
+
+				DFCListBFeld(DFC_COMNUM, ndesc, nfield, fieldname, &type, &size);
+
+				PyObject *field = PyDict_New();
+				PyList_SetItem(fields, nfield, field);
+
+				PyDict_SetItemString(field, "fieldname",
+					PyUnicode_DecodeLatin1((const char*)fieldname, strlen((const char*)fieldname), NULL));
+
+				PyDict_SetItemString(field, "type",
+					PyLong_FromLong(type));
+
+				PyDict_SetItemString(field, "size",
+					PyLong_FromLong(size));
+			}
+		}
+
+		return descs;
+	}
+
+	void push_list(int list_id, PyObject *desc, PyObject *data)
+	{
+		if(! PyList_Check(desc))
+		{
+			throw std::runtime_error("desc-argument is not a list");
 		}
 
 		if(! PyList_Check(data))
@@ -190,7 +237,7 @@ namespace
 			throw std::runtime_error("data-argument is not a list");
 		}
 
-		Py_ssize_t nfields = PyList_Size(field_lengths);
+		Py_ssize_t nfields = PyList_Size(desc);
 		Py_ssize_t nlines = PyList_Size(data);
 
 		Py_ssize_t* field_length_ints = (Py_ssize_t*)calloc(nfields, sizeof(Py_ssize_t));
@@ -200,16 +247,22 @@ namespace
 
 		for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
 		{
-			field = PyList_GetItem(field_lengths, nfield);
-			if(! PyNumber_Check(field))
+			field = PyList_GetItem(desc, nfield);
+			if(! PyDict_Check(field))
 			{
-				throw std::runtime_error("field_lengths-list contains an item that is not a number");
+				throw std::runtime_error("desc-list contains an item that is not a dict");
 			}
 
-			Py_ssize_t field_length = PyNumber_AsSsize_t(field, NULL);
+			PyObject *v = PyDict_GetItemString(field, "size");
+			if(! PyLong_Check(v))
+			{
+				throw std::runtime_error("desc-list contains an dict that has a size-member that is not a long");
+			}
 
-			field_length_ints[nfield] = field_length;
-			line_length += field_length + 1;
+			Py_ssize_t field_length = PyLong_AsSize_t(v);
+
+			field_length_ints[nfield] = field_length - 1;
+			line_length += field_length;
 		}
 
 		Py_ssize_t bufsz = line_length * nlines;
@@ -384,6 +437,7 @@ BOOST_PYTHON_MODULE(pydfcom)
 	def("get_datetime", get_datetime);
 	def("set_datetime", set_datetime);
 
+	def("read_list_descriptions", read_list_descriptions);
 	def("push_list", push_list);
 
 	def("read_data_descriptions", read_data_descriptions);

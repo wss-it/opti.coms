@@ -18,10 +18,14 @@ identities = [
 	['0030074229747', 'Dennis Sepeur'],
 ]
 
+desc = pydfcom.read_list_descriptions();
+print("read_list_descriptions() = %s" %
+	desc);
+
 print("push_list()")
 pydfcom.push_list(
 	0,           # List-ID
-	[13, 30,],   # Field-Lengths
+	desc[0],     # List-Description
 	identities)  # Data
 
 print("disconnect()")
