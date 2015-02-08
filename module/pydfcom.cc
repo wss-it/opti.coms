@@ -151,9 +151,11 @@ namespace
 					throw std::runtime_error("a line in the data-argument contains an item that is not a string");
 				}
 
-				char* value_utf8 = PyUnicode_AsUTF8(field);
+				PyObject *value_latin1_bytes = PyUnicode_AsLatin1String(field);
+				char *value_latin1 = PyBytes_AsString(value_latin1_bytes);
+				//char *value_utf8 = PyUnicode_AsUTF8(field);
 
-				strcpy((char*) &buf[offset], value_utf8);
+				strcpy((char*) &buf[offset], value_latin1);
 				offset += field_length_ints[nfield] + 1;
 			}
 		}

@@ -14,7 +14,7 @@ pydfcom.connect(
 
 identities = [
 	# ID              Name
-	['0030074700811', 'Peter Koerner'],
+	['0030074700811', 'Peter Körner'],
 	['0030074229747', 'Dennis Sepeur'],
 ]
 
