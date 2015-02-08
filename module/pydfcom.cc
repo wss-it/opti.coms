@@ -88,7 +88,7 @@ namespace
 		buf[5] = PyDateTime_DATE_GET_MINUTE(datetime);
 		buf[6] = PyDateTime_DATE_GET_SECOND(datetime);
 
-		if (!DFCComSetTime(DFC_COMNUM, DFC_BUSNUM, buf)) {
+		if (! DFCComSetTime(DFC_COMNUM, DFC_BUSNUM, buf)) {
 			throw std::runtime_error("error setting date/time");
 		}
 	}
