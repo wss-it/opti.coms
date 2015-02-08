@@ -153,15 +153,10 @@ namespace
 
 				char* value_utf8 = PyUnicode_AsUTF8(field);
 
-				printf("placing utf8-value %s of field %ld in line %ld into offset %ld of the %ld bytes buffer\n",
-					value_utf8, nfield, nline, offset, bufsz);
-
 				strcpy((char*) &buf[offset], value_utf8);
 				offset += field_length_ints[nfield] + 1;
 			}
 		}
-
-		fwrite(buf, bufsz, 1, stderr);
 
 		DFCClrListenBuffer(DFC_COMNUM);
 		if(! DFCMakeListe(DFC_COMNUM, list_id, nlines, bufsz, buf, 0))
