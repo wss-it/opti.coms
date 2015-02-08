@@ -18,6 +18,7 @@ identities = [
 	['0030074229747', 'Dennis Sepeur'],
 ]
 
+print("push_list()")
 pydfcom.push_list(
 	0,           # List-ID
 	[13, 30,],   # Field-Lengths

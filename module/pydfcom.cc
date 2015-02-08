@@ -164,8 +164,17 @@ namespace
 			free(buf);
 			free(field_length_ints);
 
-			throw std::runtime_error("error transmitting list");
+			throw std::runtime_error("error preparing list-buffer");
 		}
+
+		int error;
+		if (!DFCLoadListen(DFC_COMNUM, DFC_BUSNUM, &error)) {
+			free(buf);
+			free(field_length_ints);
+
+			_dfc_error(error);
+		}
+
 
 		free(buf);
 		free(field_length_ints);
