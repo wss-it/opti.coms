@@ -93,6 +93,84 @@ namespace
 		}
 	}
 
+	void push_list(int list_id, PyObject *field_lengths, PyObject *data)
+	{
+		if(! PyList_Check(field_lengths))
+		{
+			throw std::runtime_error("field_lengths-argument is not a list");
+		}
+
+		if(! PyList_Check(data))
+		{
+			throw std::runtime_error("data-argument is not a list");
+		}
+
+		Py_ssize_t nfields = PyList_Size(field_lengths);
+		Py_ssize_t nlines = PyList_Size(data);
+
+		Py_ssize_t* field_length_ints = (Py_ssize_t*)calloc(nfields, sizeof(Py_ssize_t));
+		Py_ssize_t  line_length = 0;
+
+		PyObject *field;
+
+		for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
+		{
+			field = PyList_GetItem(field_lengths, nfield);
+			if(! PyNumber_Check(field))
+			{
+				throw std::runtime_error("field_lengths-list contains an item that is not a number");
+			}
+
+			Py_ssize_t field_length = PyNumber_AsSsize_t(field, NULL);
+
+			field_length_ints[nfield] = field_length;
+			line_length += field_length + 1;
+		}
+
+		Py_ssize_t bufsz = line_length * nlines;
+		unsigned char* buf = (unsigned char*)calloc(bufsz, 1);
+		if(! buf)
+		{
+			throw std::runtime_error("can't allocate buffer");
+		}
+
+		Py_ssize_t offset = 0;
+		for(Py_ssize_t nline = 0; nline < nlines; nline++)
+		{
+			PyObject *line = PyList_GetItem(data, nline);
+			if(! PyList_Check(line))
+			{
+				throw std::runtime_error("data-argument contains an item that is not a list");
+			}
+
+			for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
+			{
+				field = PyList_GetItem(line, nfield);
+				if(! PyUnicode_Check(field))
+				{
+					throw std::runtime_error("a line in the data-argument contains an item that is not a string");
+				}
+
+				char* value_utf8 = PyUnicode_AsUTF8(field);
+
+				strcpy((char*) &buf[offset], value_utf8);
+				offset += field_length_ints[nfield] + 1;
+			}
+		}
+
+		DFCClrListenBuffer(DFC_COMNUM);
+		if(! DFCMakeListe(DFC_COMNUM, list_id, nlines, bufsz, buf, 0))
+		{
+			free(buf);
+			free(field_length_ints);
+
+			throw std::runtime_error("error transmitting list");
+		}
+
+		free(buf);
+		free(field_length_ints);
+	}
+
 	void disconnect()
 	{
 		DFCComClose(DFC_COMNUM);
@@ -107,5 +185,6 @@ BOOST_PYTHON_MODULE(pydfcom)
 	def("get_serial", get_serial);
 	def("get_datetime", get_datetime);
 	def("set_datetime", set_datetime);
+	def("push_list", push_list);
 	def("disconnect", disconnect);
 }
