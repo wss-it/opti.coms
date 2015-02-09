@@ -13,11 +13,17 @@ pydfcom.connect(
 	3000)            # read-timeout
 
 identities = [
-	# ID              Name
-	['0030074700811', 'Peter Körner'],
-	['0030074229747', 'Dennis Sepeur'],
+	{'ID': '0030074700811', 'Name': 'Peter Körner'},
+	{'ID': '0030074229747', 'Name': 'Jasmin Körner'},
 ]
 
+#desc = [
+#	# List 0
+#	[
+#		{'fieldname': 'ID', 'type': 4, 'size': 14},
+#		{'fieldname': 'Name', 'type': 4, 'size': 31}
+#	]
+#]
 desc = pydfcom.read_list_descriptions();
 print("read_list_descriptions() = %s" %
 	desc);

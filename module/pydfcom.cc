@@ -240,6 +240,7 @@ namespace
 		Py_ssize_t nfields = PyList_Size(desc);
 		Py_ssize_t nlines = PyList_Size(data);
 
+		PyObject **field_names = (PyObject **)calloc(nfields, sizeof(PyObject*));
 		Py_ssize_t* field_length_ints = (Py_ssize_t*)calloc(nfields, sizeof(Py_ssize_t));
 		Py_ssize_t  line_length = 0;
 
@@ -247,15 +248,44 @@ namespace
 
 		for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
 		{
+			PyObject *v;
+
 			field = PyList_GetItem(desc, nfield);
 			if(! PyDict_Check(field))
 			{
+				free(field_names);
+				free(field_length_ints);
 				throw std::runtime_error("desc-list contains an item that is not a dict");
 			}
 
-			PyObject *v = PyDict_GetItemString(field, "size");
+			v = PyDict_GetItemString(field, "type");
 			if(! PyLong_Check(v))
 			{
+				free(field_names);
+				free(field_length_ints);
+				throw std::runtime_error("desc-list contains an dict that has a type-member that is not a long");
+			}
+			if(4 != PyLong_AsLong(v))
+			{
+				free(field_names);
+				free(field_length_ints);
+				throw std::runtime_error("desc-list contains an dict that has a type-member that is not == 4 (string). pusing non-string-fields is not supported.");
+			}
+
+			v = PyDict_GetItemString(field, "fieldname");
+			if(! PyUnicode_Check(v))
+			{
+				free(field_names);
+				free(field_length_ints);
+				throw std::runtime_error("desc-list contains an dict that has a fielname-member that is not a str");
+			}
+			field_names[nfield] = v;
+
+			v = PyDict_GetItemString(field, "size");
+			if(! PyLong_Check(v))
+			{
+				free(field_names);
+				free(field_length_ints);
 				throw std::runtime_error("desc-list contains an dict that has a size-member that is not a long");
 			}
 
@@ -269,6 +299,9 @@ namespace
 		unsigned char* buf = (unsigned char*)calloc(bufsz, 1);
 		if(! buf)
 		{
+			free(buf);
+			free(field_names);
+			free(field_length_ints);
 			throw std::runtime_error("can't allocate buffer");
 		}
 
@@ -276,16 +309,22 @@ namespace
 		for(Py_ssize_t nline = 0; nline < nlines; nline++)
 		{
 			PyObject *line = PyList_GetItem(data, nline);
-			if(! PyList_Check(line))
+			if(! PyDict_Check(line))
 			{
-				throw std::runtime_error("data-argument contains an item that is not a list");
+				free(buf);
+				free(field_names);
+				free(field_length_ints);
+				throw std::runtime_error("data-argument contains an item that is not a dict");
 			}
 
 			for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
 			{
-				field = PyList_GetItem(line, nfield);
+				field = PyDict_GetItem(line, field_names[nfield]);
 				if(! PyUnicode_Check(field))
 				{
+					free(buf);
+					free(field_names);
+					free(field_length_ints);
 					throw std::runtime_error("a line in the data-argument contains an item that is not a string");
 				}
 
@@ -303,6 +342,7 @@ namespace
 		{
 			free(buf);
 			free(field_length_ints);
+			free(field_names);
 
 			throw std::runtime_error("error preparing list-buffer");
 		}
@@ -311,6 +351,7 @@ namespace
 		if (!DFCLoadListen(DFC_COMNUM, DFC_BUSNUM, &error)) {
 			free(buf);
 			free(field_length_ints);
+			free(field_names);
 
 			_dfc_error(error);
 		}
@@ -318,6 +359,7 @@ namespace
 
 		free(buf);
 		free(field_length_ints);
+		free(field_names);
 	}
 
 	PyObject *read_data_descriptions()
