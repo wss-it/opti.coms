@@ -25,8 +25,13 @@ BOOST_LIB = /usr/lib
 # compile mesh classes
 TARGET = pydfcom
 
+all: $(TARGET).so
+
 $(TARGET).so: $(TARGET).o
 	$(CXX) -shared -Wl,--export-dynamic $(TARGET).o $(ARS) -L$(BOOST_LIB) -lboost_python-py34 -L/usr/lib/python3.4/config -lpython3.4m -o $(TARGET).so
 
 $(TARGET).o: $(TARGET).cc
-	$(CXX) -I$(DFCOM_INCLUDE) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c $(TARGET).cc
+	$(CXX) -g -I$(DFCOM_INCLUDE) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c $(TARGET).cc
+
+clean:
+	rm -f $(TARGET).o $(TARGET).so
