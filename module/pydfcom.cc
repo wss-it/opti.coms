@@ -31,9 +31,9 @@ namespace
 
 	PyObject *_decode_buffer(unsigned char* buf, int len, PyObject *desc)
 	{
-		if(! PyList_Check(desc))
+		if(!desc || !PyList_Check(desc))
 		{
-			throw std::runtime_error("desc-argument is not a list");
+			throw std::runtime_error("desc-argument is no list");
 		}
 
 		PyObject *item = PyDict_New();
@@ -44,27 +44,27 @@ namespace
 			PyObject *field = PyList_GetItem(desc, nfield);
 			PyObject *v;
 
-			if(! PyDict_Check(field))
+			if(!field || !PyDict_Check(field))
 			{
 				PyObject_Free(item);
-				throw std::runtime_error("desc-list contains an item that is not a dict");
+				throw std::runtime_error("desc-list contains an item that is no dict");
 			}
 
 
 			v = PyDict_GetItemString(field, "type");
-			if(! PyLong_Check(v))
+			if(!v || !PyLong_Check(v))
 			{
 				PyObject_Free(item);
-				throw std::runtime_error("desc-list contains an dict with a member 'type' which is no int");
+				throw std::runtime_error("desc-list contains a dict without a 'type' member or with a 'type' member which is no long");
 			}
 			long type = PyLong_AsLong(v);
 
 
 			v = PyDict_GetItemString(field, "size");
-			if(! PyLong_Check(v))
+			if(!v || !PyLong_Check(v))
 			{
 				PyObject_Free(item);
-				throw std::runtime_error("desc-list contains an dict with a member 'size' which is no int");
+				throw std::runtime_error("desc-list contains a dict without a 'size' member or with a 'size' member which is no long");
 			}
 			long size = PyLong_AsLong(v);
 
@@ -100,10 +100,10 @@ namespace
 			buf += size;
 
 			PyObject *k = PyDict_GetItemString(field, "fieldname");
-			if(! PyUnicode_Check(k))
+			if(!k || !PyUnicode_Check(k))
 			{
 				PyObject_Free(item);
-				throw std::runtime_error("desc-list contains an dict with a member 'name' which is no str");
+				throw std::runtime_error("desc-list contains a dict without a 'name' member or with a 'name' member which is no str");
 			}
 
 			PyDict_SetItem(item, k, v);
@@ -157,9 +157,9 @@ namespace
 
 	void set_datetime(PyObject *datetime)
 	{
-		if(! PyDateTime_Check(datetime))
+		if(!datetime || !PyDateTime_Check(datetime))
 		{
-			throw std::runtime_error("argument is not an instance of datetime.datetime");
+			throw std::runtime_error("argument is non instance of datetime.datetime");
 		}
 
 		unsigned char buf[7];
@@ -227,14 +227,14 @@ namespace
 
 	void push_list(int list_id, PyObject *desc, PyObject *data)
 	{
-		if(! PyList_Check(desc))
+		if(!desc || !PyList_Check(desc))
 		{
-			throw std::runtime_error("desc-argument is not a list");
+			throw std::runtime_error("desc-argument is no list");
 		}
 
-		if(! PyList_Check(data))
+		if(!data || !PyList_Check(data))
 		{
-			throw std::runtime_error("data-argument is not a list");
+			throw std::runtime_error("data-argument is no list");
 		}
 
 		Py_ssize_t nfields = PyList_Size(desc);
@@ -251,42 +251,42 @@ namespace
 			PyObject *v;
 
 			field = PyList_GetItem(desc, nfield);
-			if(! PyDict_Check(field))
+			if(!field || !PyDict_Check(field))
 			{
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("desc-list contains an item that is not a dict");
+				throw std::runtime_error("desc-list contains an item that is no dict");
 			}
 
 			v = PyDict_GetItemString(field, "type");
-			if(! PyLong_Check(v))
+			if(!v || !PyLong_Check(v))
 			{
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("desc-list contains an dict that has a type-member that is not a long");
+				throw std::runtime_error("desc-list contains a dict without a 'type' member or with a 'type' member which is no long");
 			}
 			if(4 != PyLong_AsLong(v))
 			{
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("desc-list contains an dict that has a type-member that is not == 4 (string). pusing non-string-fields is not supported.");
+				throw std::runtime_error("desc-list contains a dict that has a type-member that is not == 4 (string). pusing non-string-fields is not implemented yet.");
 			}
 
 			v = PyDict_GetItemString(field, "fieldname");
-			if(! PyUnicode_Check(v))
+			if(!v || !PyUnicode_Check(v))
 			{
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("desc-list contains an dict that has a fielname-member that is not a str");
+				throw std::runtime_error("desc-list contains a dict without a 'fielname' member or with a 'fielname' member which is no str");
 			}
 			field_names[nfield] = v;
 
 			v = PyDict_GetItemString(field, "size");
-			if(! PyLong_Check(v))
+			if(!v || !PyLong_Check(v))
 			{
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("desc-list contains an dict that has a size-member that is not a long");
+				throw std::runtime_error("desc-list contains a dict without a 'size' member or with a 'size' member which is no long");
 			}
 
 			Py_ssize_t field_length = PyLong_AsSize_t(v);
@@ -309,23 +309,36 @@ namespace
 		for(Py_ssize_t nline = 0; nline < nlines; nline++)
 		{
 			PyObject *line = PyList_GetItem(data, nline);
-			if(! PyDict_Check(line))
+			if(!line || !PyDict_Check(line))
 			{
 				free(buf);
 				free(field_names);
 				free(field_length_ints);
-				throw std::runtime_error("data-argument contains an item that is not a dict");
+				throw std::runtime_error("data-argument contains an item that is no dict");
 			}
 
 			for(Py_ssize_t nfield = 0; nfield < nfields; nfield++)
 			{
+				std::string fname;
+				fname.assign(PyUnicode_AsUTF8(field_names[nfield]));
+
 				field = PyDict_GetItem(line, field_names[nfield]);
-				if(! PyUnicode_Check(field))
+				if(!field)
 				{
 					free(buf);
 					free(field_names);
 					free(field_length_ints);
-					throw std::runtime_error("a line in the data-argument contains an item that is not a string");
+					throw std::runtime_error(
+						std::string("a line in the data-argument misses the field '") + fname + std::string("'"));
+				}
+
+				if(!PyUnicode_Check(field))
+				{
+					free(buf);
+					free(field_names);
+					free(field_length_ints);
+					throw std::runtime_error(
+						std::string("a line in the data-argument has a field '") + fname + std::string("' which does not contain a string"));
 				}
 
 				PyObject *value_latin1_bytes = PyUnicode_AsLatin1String(field);
@@ -413,9 +426,9 @@ namespace
 	{
 		int error;
 
-		if(! PyList_Check(desc))
+		if(!desc || !PyList_Check(desc))
 		{
-			throw std::runtime_error("desc-argument is not a list");
+			throw std::runtime_error("desc-argument is no list");
 		}
 
 		PyObject *items = PyList_New(0);
